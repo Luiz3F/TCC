@@ -23,7 +23,7 @@ def gemini_response(packets_string: str) -> str:
     return interaction.output_text
 
 def main():
-    packets_string = process_pcap()
+    packets_string = process_pcap("test_pcap\\test.pcap")
     response = gemini_response(packets_string)
     print(response)
 
