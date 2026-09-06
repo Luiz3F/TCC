@@ -10,21 +10,55 @@ def process_pcap(pcap_file_path: str) -> str:
 
     return packets_string
 
-def gemini_response(packets_string: str) -> str:
+def gemini_response(input: str) -> str:
     from google import genai
 
     client = genai.Client()
 
-    interaction = client.interactions.create(
+    response = client.interactions.create(
         model="gemini-3.6-flash",
-        input=f"Use plaintext syntax. Generate firewall rules to stop the DoS attack detected in the following packet capture: {packets_string}"
+        input=input
     )
 
-    return interaction.output_text
+    return response.output_text
+
+def openai_response(input: str) -> str:
+    from openai import OpenAI
+
+    client = OpenAI()
+
+    response = client.responses.create(
+        model="gpt-5.6-luna",
+        input=input
+    )
+
+    return response.output_text
+
+def claude_response(input: str) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic()
+
+    response = client.messages.create(
+        max_tokens=10240,
+        model="claude-sonnet-5",
+        messages=[
+            {
+                "content": input,
+                "role": "user",
+            }
+        ]
+    )
+
+    output = "".join(block.text for block in response.content if block.type == "text")
+    return output
+
+#TODO: deepseek_response
 
 def main():
     packets_string = process_pcap("test_pcap\\test.pcap")
-    response = gemini_response(packets_string)
+    input = f"Use plaintext syntax. Generate pfSense firewall rules to stop the DoS attack detected in the following packet capture: {packets_string}"
+    response = claude_response(input)
     print(response)
 
 if __name__ == "__main__":
