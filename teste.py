@@ -58,8 +58,8 @@ def claude_response(input: str) -> str:
 def main():
     packets_string = process_pcap("test_pcap\\test.pcap")
     input = f"Use plaintext syntax. Generate pfSense firewall rules to stop the DoS attack detected in the following packet capture: {packets_string}"
-    response = claude_response(input)
-    print(response)
+    #response = openai_response(input)
+    #print(response)
 
 if __name__ == "__main__":
     main()
