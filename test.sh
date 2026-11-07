@@ -28,17 +28,51 @@ client_ip="192.168.165.5"
 server_ip="192.168.244.4"
 # tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
+error() {
+    test $? -eq 0 || (echo $1 >&2; exit 1)
+}
+
+shutdown_vms() {
+    VBoxManage list runningvms | awk -F'"' '{print $2}' | while read -r vm; do
+        [ -z "$vm" ] && continue
+        VBoxManage controlvm "$vm" poweroff
+        error "Falha no desligamento de $vm"
+    done
+}
+
+start_vms() {
+    local vms=("pfSense" "nftables" "iptables" "kali-linux-2025.4-virtualbox-amd64")
+
+    # Shutdown vms if there are still some running
+    shutdown_vms
+
+    # In case program stops before vms are properly turned off
+    trap 'shutdown_vms' EXIT
+
+    # Restore them to default state
+    for vm in "${vms[@]}"; do
+        VBoxManage snapshot $vm restore "Default State"
+        error "Falha na restauração de $vm ao estado default"
+
+        VBoxManage startvm $vm --type headless
+        error "Falha no startup de $vm"
+    done
+}
+
 client_collect_times() {
     local N=$1
     TIMEFORMAT=%R
     for ((i = 0; i < N; i++)); do
         time wget -qO teste.html http://192.168.244.4:8080
+        test $? -eq 0 || exit 1
     done
 }
 
 collect_download_times() {
     local filename=$1
     ssh tcc-client-vm "$(declare -f client_collect_times); client_collect_times $NUM_ITER" > $filename 2>&1
+    error "Falha na coleta de tempos"
+
     echo "" >> $filename
     
     # Calculate average 
@@ -98,7 +132,9 @@ stop_attack() {
     # TODO
 
 # 2.
+start_vms
 collect_download_times output.txt
+shutdown_vms
 #start_attack "auxiliary/dos/http/slowloris"
 #sleep 30
 #stop_attack
