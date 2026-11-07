@@ -9,7 +9,7 @@
 # 4.2. Desconectar do atacante
 # 4.3. SSH na VM cliente legítima e coletar tempo controle com ataque N vezes
 # 4.4. Desconectar do cliente legítimo
-# 4.5. SSH no atacante para coletar pcap (?)
+# 4.5. SSH no atacante para coletar pcap (VBoxManage modifyvm "Gateway-VM-Name" --nictrace1 on --nictracefile1 "C:\path\to\gateway_trace.pcap")
 # 4.6. Desconectar do atacante
 # 4.7. Para cada modelo de LLM:
 # 4.7.1. Rodar o script em python usando o pcap, tipo de ataque, firewall e modelo de LLM como parâmetros
@@ -22,7 +22,7 @@
 #python ./teste.py
 
 # 0.
-readonly NUM_ITER=5
+readonly NUM_ITER=15
 firewall="iptables"
 client_ip="192.168.165.5"
 server_ip="192.168.244.4"
@@ -31,7 +31,7 @@ server_ip="192.168.244.4"
 client_collect_times() {
     local N=$1
     TIMEFORMAT=%R
-    for ((i = 0; i  < N; i++)); do
+    for ((i = 0; i < N; i++)); do
         time wget -qO teste.html http://192.168.244.4:8080
     done
 }
@@ -39,6 +39,15 @@ client_collect_times() {
 collect_download_times() {
     local filename=$1
     ssh tcc-client-vm "$(declare -f client_collect_times); client_collect_times $NUM_ITER" > $filename 2>&1
+    echo "" >> $filename
+    
+    # Calculate average 
+    local avg=$(cat $filename | awk -v count="$NUM_ITER" '{sum+=$1} END {print sum/count}')
+    echo $avg >> $filename
+
+    # Calculate std deviation
+    local dev=$(cat $filename | awk -v avg="$avg" -v count="$NUM_ITER" '{sum+=($1-avg)^2} END {print sqrt(sum/count)}')
+    echo $dev >> $filename
 }
 
 attacker_start_attack() {
@@ -89,7 +98,7 @@ stop_attack() {
     # TODO
 
 # 2.
-#collect_download_times output.txt
-start_attack "auxiliary/dos/http/slowloris"
-sleep 30
-stop_attack
+collect_download_times output.txt
+#start_attack "auxiliary/dos/http/slowloris"
+#sleep 30
+#stop_attack

@@ -1,4 +1,5 @@
 .env
 .vscode
 .venv
+output.txt
 tutorial_criar_shortcut_ssh.md
