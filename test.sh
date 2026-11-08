@@ -58,6 +58,7 @@ start_vms() {
     trap 'shutdown_vms' EXIT
 
     # Restore them to default state
+    sleep 3
     for vm in "${vms[@]}"; do
         VBoxManage snapshot $vm restore "Default State"
         error "Falha na restauração de $vm ao estado default"
@@ -137,7 +138,7 @@ start_attack() {
     ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
 
     # It may take some seconds for the attack to affect the server
-    sleep 15
+    sleep 10
 }
 
 # 1.
@@ -159,7 +160,8 @@ start_attack "auxiliary/dos/http/slowloris"
 #collect_download_times slowloris.txt
 
 # 4.5/6
-
+echo Colectando .pcap do ataque
+timeout 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > slowloris.pcap
 
 stop_attack
 shutdown_vms
