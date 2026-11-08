@@ -2,4 +2,6 @@
 .vscode
 .venv
 output.txt
+controle.txt
+slowloris.txt
 tutorial_criar_shortcut_ssh.md

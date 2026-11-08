@@ -22,10 +22,15 @@
 #python ./teste.py
 
 # 0.
-readonly NUM_ITER=15
+readonly NUM_ITER=10
 firewall="iptables"
 client_ip="192.168.165.5"
 server_ip="192.168.244.4"
+
+client_vm="iptables"
+server_vm="nftables"
+pfSense_vm="pfSense"
+attacker_vm="kali-linux-2025.4-virtualbox-amd64"
 # tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
 error() {
@@ -41,7 +46,7 @@ shutdown_vms() {
 }
 
 start_vms() {
-    local vms=("pfSense" "nftables" "iptables" "kali-linux-2025.4-virtualbox-amd64")
+    local vms=($pfSense_vm $server_vm $client_vm $attacker_vm)
 
     # Shutdown vms if there are still some running
     shutdown_vms
@@ -124,9 +129,12 @@ EOF
 start_attack() {
     # In case last attack was not properly ended
     stop_attack
-    
+
     local attack=$1
     ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
+
+    # It may take some seconds for the attack to affect the server
+    sleep 15
 }
 
 # 1.
@@ -134,9 +142,12 @@ start_attack() {
 
 # 2.
 start_vms
-collect_download_times controle.txt
-start_attack "auxiliary/dos/http/slowloris"
-collect_download_times slowloris.txt
+stop_attack
+
+#echo Coletando tempos controle
+#collect_download_times controle.txt
+#echo coletando tempos com slowloris
+#start_attack "auxiliary/dos/http/slowloris"
+#collect_download_times slowloris.txt
 shutdown_vms
-#sleep 30
 #stop_attack
