@@ -9,8 +9,8 @@
 # 4.2. Desconectar do atacante
 # 4.3. SSH na VM cliente legítima e coletar tempo controle com ataque N vezes
 # 4.4. Desconectar do cliente legítimo
-# 4.5. SSH no atacante para coletar pcap (VBoxManage modifyvm "Gateway-VM-Name" --nictrace1 on --nictracefile1 "C:\path\to\gateway_trace.pcap")
-# 4.6. Desconectar do atacante
+# 4.5. SSH no gateway para coletar pcap (VBoxManage modifyvm "Gateway-VM-Name" --nictrace1 on --nictracefile1 "C:\path\to\gateway_trace.pcap")
+# 4.6. Desconectar do gateway
 # 4.7. Para cada modelo de LLM:
 # 4.7.1. Rodar o script em python usando o pcap, tipo de ataque, firewall e modelo de LLM como parâmetros
 # 4.7.2. Aplicar a regra gerada
@@ -34,7 +34,10 @@ attacker_vm="kali-linux-2025.4-virtualbox-amd64"
 # tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
 error() {
-    test $? -eq 0 || (echo $1 >&2; exit 1)
+    if [[ $? -ne 0 ]] ; then
+        echo $1 >&2
+        exit 1
+    fi
 }
 
 shutdown_vms() {
@@ -138,16 +141,25 @@ start_attack() {
 }
 
 # 1.
-    # TODO
-
-# 2.
 start_vms
-stop_attack
 
+# 2/3.
 #echo Coletando tempos controle
 #collect_download_times controle.txt
+
+# 4.
+
+    # TODO
+
+# 4.1/2
+start_attack "auxiliary/dos/http/slowloris"
+
+# 4.3/4
 #echo coletando tempos com slowloris
-#start_attack "auxiliary/dos/http/slowloris"
 #collect_download_times slowloris.txt
+
+# 4.5/6
+
+
+stop_attack
 shutdown_vms
-#stop_attack
