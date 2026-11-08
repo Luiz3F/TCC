@@ -151,9 +151,11 @@ start_vms
 # 4.
 
     # TODO
+    attack="auxiliary/dos/http/slowloris"
+    pcap_path="slowloris.pcap"
 
 # 4.1/2
-start_attack "auxiliary/dos/http/slowloris"
+start_attack $attack
 
 # 4.3/4
 #echo coletando tempos com slowloris
@@ -161,7 +163,11 @@ start_attack "auxiliary/dos/http/slowloris"
 
 # 4.5/6
 echo Colectando .pcap do ataque
-timeout 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > slowloris.pcap
+timeout 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+
+# 4.7
+
+    # TODO
 
 stop_attack
 shutdown_vms
