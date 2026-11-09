@@ -66,6 +66,8 @@ start_vms() {
         VBoxManage startvm $vm --type headless
         error "Falha no startup de $vm"
     done
+
+    sleep 5
 }
 
 client_collect_times() {
@@ -136,6 +138,7 @@ start_attack() {
 
     local attack=$1
     ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
+    error "Falha na conexão com vm atacante"
 
     # It may take some seconds for the attack to affect the server
     sleep 10
@@ -163,11 +166,17 @@ start_attack $attack
 
 # 4.5/6
 echo Colectando .pcap do ataque
-timeout 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+timeout 5 ssh tcc-pfsense-vm "tcpdump -q -ni em2 -w -" > $pcap_path
+error "Falha ao coletar .pcap do ataque"
 
 # 4.7
 
     # TODO
+
+# 4.7.1
+echo "Gerando regras"
+python teste.py $pcap_path > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL!
+sed -i 's/\r$//' tmp.sh # Windows moment
 
 stop_attack
 shutdown_vms
