@@ -1,5 +1,10 @@
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+
 from scapy.all import rdpcap
 import json
+import sys
 
 # TODO: Verify if file size is bellow limit
 def process_pcap(pcap_file_path: str) -> str:
@@ -56,10 +61,11 @@ def claude_response(input: str) -> str:
 #TODO: deepseek_response
 
 def main():
-    packets_string = process_pcap("test_pcap\\test.pcap")
-    input = f"Use plaintext syntax. Generate pfSense firewall rules to stop the DoS attack detected in the following packet capture: {packets_string}"
-    #response = openai_response(input)
-    #print(response)
+    pcap_file = sys.argv[1]
+    packets_string = process_pcap(pcap_file)
+    input = f"Use plaintext syntax. Make a sh script that generates and applies pfSense firewall rules to stop the DoS attack detected in the following packet capture. Make the script and nothing else. {packets_string}"
+    response = openai_response(input)
+    print(response)
 
 if __name__ == "__main__":
     main()
