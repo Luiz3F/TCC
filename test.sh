@@ -9,7 +9,7 @@
 # 4.2. Desconectar do atacante
 # 4.3. SSH na VM cliente legítima e coletar tempo controle com ataque N vezes
 # 4.4. Desconectar do cliente legítimo
-# 4.5. SSH no gateway para coletar pcap (VBoxManage modifyvm "Gateway-VM-Name" --nictrace1 on --nictracefile1 "C:\path\to\gateway_trace.pcap")
+# 4.5. SSH no gateway para coletar pcap
 # 4.6. Desconectar do gateway
 # 4.7. Para cada modelo de LLM:
 # 4.7.1. Rodar o script em python usando o pcap, tipo de ataque, firewall e modelo de LLM como parâmetros
@@ -171,12 +171,32 @@ error "Falha ao coletar .pcap do ataque"
 
 # 4.7
 
-    # TODO
+for firewall in "nftables" "iptables" "pfSense"; do
 
-# 4.7.1
-echo "Gerando regras"
-python teste.py $pcap_path > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL!
-sed -i 's/\r$//' tmp.sh # Windows moment
+    # 4.7.1
+    echo "Gerando regras"
+    python teste.py $pcap_path $firewall > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+    sed -i 's/\r$//' tmp.sh # Windows moment
 
+    # 4.7.2
+    echo "Aplicando regras"
+    if [ $firewall = "pfSense" ]; then # Caso o firewall atual seja o pfSense
+        VBoxManage controlvm $pfSense_vm poweroff
+        sleep 3
+        VBoxManage snapshot $pfSense_vm restore "Firewall State"
+        sleep 3
+        VBoxManage startvm $pfSense_vm --type headless
+        sleep 5
+        ssh tcc-pfsense-vm 'sh -s' < tmp.sh
+    else
+        ssh tcc-nftables-vm 'sh -s' < tmp.sh
+    fi
+    #rm -f tmp.sh
+
+    # 4.7.3
+    echo Coletando tempos com regras aplicadas
+    collect_download_times 
+
+done
 stop_attack
 shutdown_vms
