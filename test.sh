@@ -194,6 +194,9 @@ for firewall in "nftables"; do #"iptables" "pfSense"; do
     sleep 10
     #rm -f tmp.sh
 
+    # 4.7.3
+    echo Coletando tempos com regras aplicadas
+    collect_download_times slowloris_ai.txt
 
 done
 stop_attack
