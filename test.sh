@@ -169,10 +169,8 @@ start_attack $attack
 echo Colectando .pcap do ataque
 timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
 test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
-exit 0
 
 # 4.7
-
 for firewall in "nftables"; do #"iptables" "pfSense"; do
 
     # 4.7.1
@@ -191,8 +189,9 @@ for firewall in "nftables"; do #"iptables" "pfSense"; do
         sleep 5
         ssh tcc-pfsense-vm 'sh -s' < tmp.sh
     else
-        ssh tcc-nftables-vm 'sh -s' < tmp.sh
+        { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T 'sudo -S sh -s 2>/dev/null'
     fi
+    sleep 10
     #rm -f tmp.sh
 
 
