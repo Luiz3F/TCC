@@ -34,9 +34,10 @@ attacker_vm="kali-linux-2025.4-virtualbox-amd64"
 # tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
 error() {
-    if [[ $? -ne 0 ]] ; then
+    local error_code=$?
+    if [[ $error_code -ne 0 ]] ; then
         echo $1 >&2
-        exit 1
+        exit $error_code
     fi
 }
 
@@ -166,12 +167,13 @@ start_attack $attack
 
 # 4.5/6
 echo Colectando .pcap do ataque
-timeout 5 ssh tcc-pfsense-vm "tcpdump -q -ni em2 -w -" > $pcap_path
-error "Falha ao coletar .pcap do ataque"
+timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
+exit 0
 
 # 4.7
 
-for firewall in "nftables" "iptables" "pfSense"; do
+for firewall in "nftables"; do #"iptables" "pfSense"; do
 
     # 4.7.1
     echo "Gerando regras"
@@ -193,9 +195,6 @@ for firewall in "nftables" "iptables" "pfSense"; do
     fi
     #rm -f tmp.sh
 
-    # 4.7.3
-    echo Coletando tempos com regras aplicadas
-    collect_download_times 
 
 done
 stop_attack
