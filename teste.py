@@ -15,18 +15,6 @@ def process_pcap(pcap_file_path: str) -> str:
 
     return packets_string
 
-def gemini_response(input: str) -> str:
-    from google import genai
-
-    client = genai.Client()
-
-    response = client.interactions.create(
-        model="gemini-3.6-flash",
-        input=input
-    )
-
-    return response.output_text
-
 def openai_response(input: str) -> str:
     from openai import OpenAI
 
