@@ -22,7 +22,7 @@
 #python ./teste.py
 
 # 0.
-readonly NUM_ITER=10
+readonly NUM_ITER=3 #10
 firewall="iptables"
 client_ip="192.168.165.5"
 server_ip="192.168.244.4"
@@ -68,7 +68,7 @@ start_vms() {
         error "Falha no startup de $vm"
     done
 
-    sleep 5
+    sleep 15
 }
 
 client_collect_times() {
@@ -112,6 +112,7 @@ attacker_stop_attack() {
 
 stop_attack() {
     ssh tcc-attacker-vm "$(declare -f attacker_stop_attack); attacker_stop_attack"
+    error "Falha na conexão com vm atacante" 
 }
 
 attacker_start_attack() {
@@ -124,7 +125,7 @@ attacker_start_attack() {
     use $attack
     set rhost $server_ip
     set rport 8080
-    set sockets 800
+    set sockets 2000
     exploit -q
 EOF
     msfconsole -q -r $script_path > /dev/null 2>&1 &
@@ -142,7 +143,7 @@ start_attack() {
     error "Falha na conexão com vm atacante"
 
     # It may take some seconds for the attack to affect the server
-    sleep 10
+    sleep 25
 }
 
 # 1.
@@ -155,27 +156,35 @@ start_vms
 # 4.
 
     # TODO
-    attack="auxiliary/dos/http/slowloris"
-    pcap_path="slowloris.pcap"
+    attack="auxiliary/dos/http/slowloris" #tcp/synflood
+    pcap_path="./slowloris.pcap"
 
 # 4.1/2
+echo Começando ataque
 start_attack $attack
 
+
 # 4.3/4
-#echo coletando tempos com slowloris
-#collect_download_times slowloris.txt
+echo Coletando tempos com slowloris
+collect_download_times slowloris.txt
+
 
 # 4.5/6
 echo Colectando .pcap do ataque
 timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
 test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
+[ -s $pcap_path ]
+error "Falha ao coletar .pcap do ataque"
+stop_attack
+exit 0 
 
 # 4.7
-for firewall in "nftables"; do #"iptables" "pfSense"; do
+for firewall in "pfSense"; do # "iptables" "nftables" ; do
+    model="openai"
 
     # 4.7.1
-    echo "Gerando regras"
-    python teste.py $pcap_path $firewall > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+    echo Gerando regras
+    #python teste.py $pcap_path $firewall $model > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
     sed -i 's/\r$//' tmp.sh # Windows moment
 
     # 4.7.2
@@ -186,17 +195,30 @@ for firewall in "nftables"; do #"iptables" "pfSense"; do
         VBoxManage snapshot $pfSense_vm restore "Firewall State"
         sleep 3
         VBoxManage startvm $pfSense_vm --type headless
-        sleep 5
+        sleep 10
+        start_attack $attack
+        echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
+        collect_download_times slowloris.txt
+        stop_attack
         ssh tcc-pfsense-vm 'sh -s' < tmp.sh
     else
+        VBoxManage controlvm $server_vm poweroff
+        sleep 3
+        VBoxManage snapshot $server_vm restore "Default State"
+        sleep 3
+        VBoxManage startvm $server_vm --type headless
+        sleep 20
+        
         { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T 'sudo -S sh -s 2>/dev/null'
     fi
     sleep 10
     #rm -f tmp.sh
 
     # 4.7.3
+    start_attack $attack
     echo Coletando tempos com regras aplicadas
     collect_download_times slowloris_ai.txt
+    stop_attack
 
 done
 stop_attack
