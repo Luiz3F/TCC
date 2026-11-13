@@ -6,6 +6,18 @@ from scapy.all import rdpcap
 import json
 import sys
 import argparse
+from argparse import Namespace
+
+def parse_arguments() -> Namespace:
+    parser = argparse.ArgumentParser(description="Generates a script that creates and applies firewall rules to stop DoS attacks by using third-party LLMs")
+    
+    parser.add_argument("pcap_file", type=str, help="Path to the .pcap file that will be analysed")
+    parser.add_argument("firewall", type=str, help="Firewall for which the rules will be generated")
+    parser.add_argument("model", type=str, choices=["openai", "claude", "deepseek"], help="Model that will generate the script")
+    parser.add_argument("-i", "--ip-agnostic", action="store_true", help="Script will create rules that are agnostic to attacker ip (in case of ip spoofing or something like that)")
+
+    return parser.parse_args()
+
 
 # TODO: Verify if file size is bellow limit
 def process_pcap(pcap_file_path: str) -> str:
@@ -51,12 +63,7 @@ def claude_response(input: str) -> str:
 
 def main():
     # Parse arguments
-    parser = argparse.ArgumentParser(description="Generates a script that creates and applies firewall rules to stop DoS attacks by using third-party LLMs")
-    parser.add_argument("pcap_file", type=str, help="Path to the .pcap file that will be analysed")
-    parser.add_argument("firewall", type=str, help="Firewall for which the rules will be generated")
-    parser.add_argument("model", type=str, choices=["openai", "claude", "deepseek"], help="Model that will generate the script")
-    parser.add_argument("-i", "--ip-agnostic", action="store_true", help="Script will create rules that are agnostic to attacker ip (in case of ip spoofing or something like that)")
-    args = parser.parse_args()
+    args = parse_arguments()
     pcap_file = args.pcap_file
     firewall = args.firewall
     model = args.model
