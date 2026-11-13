@@ -66,9 +66,21 @@ def main():
     packets_string = process_pcap(pcap_file)
 
     # Send to LLM
-    # TODO: ip_agnostic e model
+    # TODO: ip_agnostic
     input = f"Use plaintext syntax. Make a sh script that generates and applies {firewall} firewall rules to stop the DoS attack detected in the following packet capture. Make the script and nothing else. {packets_string}"
-    response = openai_response(input)
+
+    response = ""
+    match model:
+        case "openai":
+            response = openai_response(input)
+        case "claude":
+            response = claude_response(input)
+        case "deepseek":
+            # TODO
+            response = "Not implemented"
+        case _:
+            response = "Should not be reached!!!"
+            
     print(response)
 
 if __name__ == "__main__":
