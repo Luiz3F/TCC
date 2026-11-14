@@ -15,6 +15,7 @@ def parse_arguments() -> Namespace:
     parser.add_argument("firewall", type=str, help="Firewall for which the rules will be generated")
     parser.add_argument("model", type=str, choices=["openai", "claude", "deepseek"], help="Model that will generate the script")
     parser.add_argument("-i", "--ip-agnostic", action="store_true", help="Script will create rules that are agnostic to attacker ip (in case of ip spoofing or something like that)")
+    parser.add_argument("-a", "--attack", type=str, help="Type of DoS attack detected", default=None)
 
     return parser.parse_args()
 
@@ -68,13 +69,19 @@ def main():
     firewall = args.firewall
     model = args.model
     ip_agnostic = args.ip_agnostic
+    attack = args.attack
 
     # Process .pcap
     packets_string = process_pcap(pcap_file)
 
     # Send to LLM
-    # TODO: ip_agnostic
-    input = f"Use plaintext syntax. Make a sh script that generates and applies {firewall} firewall rules to stop the DoS attack detected in the following packet capture. Make the script and nothing else. {packets_string}"
+    ip_agnostic_text = ("Make it so the rules will stop the attack even if the attacker changes their IP address" if ip_agnostic else "")
+    attack_text = ("" if attack is None else f"{attack} ")
+
+    input = f"""Use plaintext syntax. \
+Make a sh script that generates and applies {firewall} firewall rules to stop the {attack_text}DoS attack detected in the following packet capture. \
+Make the script and nothing else. {ip_agnostic_text}. \
+{packets_string}"""
 
     response = ""
     match model:
