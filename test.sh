@@ -22,8 +22,7 @@
 #python ./teste.py
 
 # 0.
-readonly NUM_ITER=3 #10
-firewall="iptables"
+readonly NUM_ITER=10
 client_ip="192.168.165.5"
 server_ip="192.168.244.4"
 
@@ -88,11 +87,12 @@ collect_download_times() {
     echo "" >> $filename
     
     # Calculate average 
-    local avg=$(cat $filename | awk -v count="$NUM_ITER" '{sum+=$1} END {print sum/count}')
+    local avg=$(awk '{sum+=$1} END {print sum/NR}' "$filename")
     echo $avg >> $filename
 
     # Calculate std deviation
-    local dev=$(cat $filename | awk -v avg="$avg" -v count="$NUM_ITER" '{sum+=($1-avg)^2} END {print sqrt(sum/count)}')
+    local dev=$(awk '{sum+=$1; sumsq+=$1*$1} END {print sqrt(sumsq/NR - (sum/NR)**2)}' "$filename")
+
     echo $dev >> $filename
 }
 
@@ -161,22 +161,22 @@ start_vms
 
 # 4.1/2
 echo Começando ataque
-start_attack $attack
+#start_attack $attack
 
 
 # 4.3/4
 echo Coletando tempos com slowloris
-collect_download_times slowloris.txt
+#collect_download_times slowloris.txt
 
 
 # 4.5/6
 echo Colectando .pcap do ataque
-timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
-test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
-[ -s $pcap_path ]
-error "Falha ao coletar .pcap do ataque"
-stop_attack
-exit 0 
+#timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+#test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
+#[ -s $pcap_path ]
+#error "Falha ao coletar .pcap do ataque"
+#stop_attack
+
 
 # 4.7
 for firewall in "pfSense"; do # "iptables" "nftables" ; do
@@ -184,7 +184,7 @@ for firewall in "pfSense"; do # "iptables" "nftables" ; do
 
     # 4.7.1
     echo Gerando regras
-    #python teste.py $pcap_path $firewall $model > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+    #python teste.py $pcap_path $firewall $model -a slowloris > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
     sed -i 's/\r$//' tmp.sh # Windows moment
 
     # 4.7.2
@@ -196,10 +196,10 @@ for firewall in "pfSense"; do # "iptables" "nftables" ; do
         sleep 3
         VBoxManage startvm $pfSense_vm --type headless
         sleep 10
-        start_attack $attack
-        echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
-        collect_download_times slowloris.txt
-        stop_attack
+        #start_attack $attack
+        #echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
+        #collect_download_times slowloris.txt
+        #stop_attack
         ssh tcc-pfsense-vm 'sh -s' < tmp.sh
     else
         VBoxManage controlvm $server_vm poweroff
