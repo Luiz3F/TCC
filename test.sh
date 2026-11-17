@@ -111,7 +111,7 @@ attacker_stop_attack() {
 }
 
 stop_attack() {
-    ssh tcc-attacker-vm "$(declare -f attacker_stop_attack); attacker_stop_attack"
+    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_stop_attack); attacker_stop_attack'"
     error "Falha na conexão com vm atacante" 
 }
 
@@ -139,7 +139,7 @@ start_attack() {
     stop_attack
 
     local attack=$1
-    ssh tcc-attacker-vm "$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip"
+    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip'"
     error "Falha na conexão com vm atacante"
 
     # It may take some seconds for the attack to affect the server
@@ -156,26 +156,43 @@ start_vms
 # 4.
 
     # TODO
-    attack="auxiliary/dos/http/slowloris" #tcp/synflood
+    attack="auxiliary/dos/http/slowloris" #tcp/synflood" #" #" #" 
+    # https://github.com/rapid7/metasploit-framework/blob/master/modules/auxiliary/dos/http/apache_range_dos.rb
     pcap_path="./slowloris.pcap"
 
 # 4.1/2
 echo Começando ataque
-#start_attack $attack
-
+start_attack $attack
 
 # 4.3/4
 echo Coletando tempos com slowloris
 #collect_download_times slowloris.txt
+stop_attack
 
 
 # 4.5/6
 echo Colectando .pcap do ataque
-#timeout --preserve-status 5 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
-#test $? -eq 255 || error "Falha ao coletar .pcap do ataque"
-#[ -s $pcap_path ]
-#error "Falha ao coletar .pcap do ataque"
+ssh tcc-pfsense-vm "nohup timeout 35 tcpdump -ni em2 -w /tmp/slowloris.pcap host $server_ip > /tmp/slowloris.log 2>&1 &"
+error "Falha ao coletar .pcap do ataque"
+sleep 2
+start_attack $attack
+sleep 10
+stop_attack
+sleep 5
+scp tcc-pfsense-vm:/tmp/slowloris.pcap .
+error "Falha ao coletar .pcap do ataque"
+[ -s $pcap_path ] # Check if empty file
+error "Falha ao coletar .pcap do ataque"
+exit 0
 #stop_attack
+#exit 0
+#sleep 100
+#timeout --preserve-status 10 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+#test $? -eq 255 || error "Falha ao coletar .pcap do ataque 1"
+#[ -s $pcap_path ]
+#error "Falha ao coletar .pcap do ataque 2"
+#stop_attack
+#exit 0
 
 
 # 4.7
@@ -209,7 +226,7 @@ for firewall in "pfSense"; do # "iptables" "nftables" ; do
         VBoxManage startvm $server_vm --type headless
         sleep 20
         
-        { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T 'sudo -S sh -s 2>/dev/null'
+        { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
     fi
     sleep 10
     #rm -f tmp.sh
