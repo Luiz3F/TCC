@@ -18,12 +18,10 @@ def parse_arguments() -> Namespace:
 
     return parser.parse_args()
 
-
-# TODO: Verify if file size is bellow limit
 def process_pcap(pcap_file_path: str) -> str:
     packets = rdpcap(pcap_file_path)
-
-    json_list = [json.loads(packet.json()) for packet in packets]
+    max_packet_count = 2000
+    json_list = [json.loads(packet.json()) for packet in packets[:max_packet_count]]
     packets_string = json.dumps(json_list)
 
     return packets_string
