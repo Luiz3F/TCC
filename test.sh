@@ -32,6 +32,9 @@ pfSense_vm="pfSense"
 attacker_vm="kali-linux-2025.4-virtualbox-amd64"
 # tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
+declare -A slowloris=(["name"]="slowloris" ["path"]="auxiliary/dos/http/slowloris")
+declare -A synflood=(["name"]="synflood" ["path"]="auxiliary/dos/tcp/synflood")
+
 error() {
     local error_code=$?
     if [[ $error_code -ne 0 ]] ; then
@@ -74,7 +77,7 @@ client_collect_times() {
     local N=$1
     TIMEFORMAT=%R
     for ((i = 0; i < N; i++)); do
-        time wget -qO teste.html http://192.168.244.4:8080
+        time wget --timeout=120 --tries=2 -qO teste.html http://192.168.244.4:8080
         test $? -eq 0 || exit 1
     done
 }
@@ -82,6 +85,7 @@ client_collect_times() {
 collect_download_times() {
     local filename=$1
     ssh tcc-client-vm "$(declare -f client_collect_times); client_collect_times $NUM_ITER" > $filename 2>&1
+    [ -s $filename ]
     error "Falha na coleta de tempos"
 
     echo "" >> $filename
@@ -147,6 +151,7 @@ start_attack() {
 }
 
 # 1.
+
 start_vms
 
 # 2/3.
@@ -156,87 +161,90 @@ start_vms
 # 4.
 
     # TODO
-    attack="auxiliary/dos/http/slowloris" #tcp/synflood" #" #" #" 
+    #attack="auxiliary/dos/http/slowloris" #tcp/synflood" #" #" #" 
     # https://github.com/rapid7/metasploit-framework/blob/master/modules/auxiliary/dos/http/apache_range_dos.rb
-    pcap_path="./slowloris.pcap"
+    #pcap_path="./slowloris.pcap"
+for i in "synflood" "slowloris"; do
+    declare -n attack=$i
+    # 4.1/2
+    echo Começando ataque
+    start_attack ${attack["path"]}
 
-# 4.1/2
-echo Começando ataque
-start_attack $attack
-
-# 4.3/4
-echo Coletando tempos com slowloris
-#collect_download_times slowloris.txt
-stop_attack
-
-
-# 4.5/6
-echo Colectando .pcap do ataque
-ssh tcc-pfsense-vm "nohup timeout 35 tcpdump -ni em2 -w /tmp/slowloris.pcap host $server_ip > /tmp/slowloris.log 2>&1 &"
-error "Falha ao coletar .pcap do ataque"
-sleep 2
-start_attack $attack
-sleep 10
-stop_attack
-sleep 5
-scp tcc-pfsense-vm:/tmp/slowloris.pcap .
-error "Falha ao coletar .pcap do ataque"
-[ -s $pcap_path ] # Check if empty file
-error "Falha ao coletar .pcap do ataque"
-exit 0
-#stop_attack
-#exit 0
-#sleep 100
-#timeout --preserve-status 10 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
-#test $? -eq 255 || error "Falha ao coletar .pcap do ataque 1"
-#[ -s $pcap_path ]
-#error "Falha ao coletar .pcap do ataque 2"
-#stop_attack
-#exit 0
-
-
-# 4.7
-for firewall in "pfSense"; do # "iptables" "nftables" ; do
-    model="openai"
-
-    # 4.7.1
-    echo Gerando regras
-    #python teste.py $pcap_path $firewall $model -a slowloris > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
-    sed -i 's/\r$//' tmp.sh # Windows moment
-
-    # 4.7.2
-    echo "Aplicando regras"
-    if [ $firewall = "pfSense" ]; then # Caso o firewall atual seja o pfSense
-        VBoxManage controlvm $pfSense_vm poweroff
-        sleep 3
-        VBoxManage snapshot $pfSense_vm restore "Firewall State"
-        sleep 3
-        VBoxManage startvm $pfSense_vm --type headless
-        sleep 10
-        #start_attack $attack
-        #echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
-        #collect_download_times slowloris.txt
-        #stop_attack
-        ssh tcc-pfsense-vm 'sh -s' < tmp.sh
-    else
-        VBoxManage controlvm $server_vm poweroff
-        sleep 3
-        VBoxManage snapshot $server_vm restore "Default State"
-        sleep 3
-        VBoxManage startvm $server_vm --type headless
-        sleep 20
-        
-        { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
-    fi
-    sleep 10
-    #rm -f tmp.sh
-
-    # 4.7.3
-    start_attack $attack
-    echo Coletando tempos com regras aplicadas
-    collect_download_times slowloris_ai.txt
+    # 4.3/4
+    echo Coletando tempos com ${attack["name"]}
+    collect_download_times ${attack["name"]}.txt
     stop_attack
 
+
+    # 4.5/6
+    echo Colectando .pcap do ataque
+    ssh tcc-pfsense-vm "nohup timeout 35 tcpdump -ni em2 -w /tmp/${attack["name"]}.pcap host $server_ip > /tmp/${attack["name"]}.log 2>&1 &"
+    error "Falha ao coletar .pcap do ataque"
+    sleep 2
+    start_attack $attack
+    sleep 10
+    stop_attack
+    sleep 5
+    scp tcc-pfsense-vm:/tmp/${attack["name"]}.pcap .
+    error "Falha ao coletar .pcap do ataque"
+    [ -s $pcap_path ] # Check if empty file
+    error "Falha ao coletar .pcap do ataque"
+    #stop_attack
+    #exit 0
+    #sleep 100
+    #timeout --preserve-status 10 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
+    #test $? -eq 255 || error "Falha ao coletar .pcap do ataque 1"
+    #[ -s $pcap_path ]
+    #error "Falha ao coletar .pcap do ataque 2"
+    #stop_attack
+    #exit 0
+
+done
+exit 0
+    # 4.7
+    for firewall in "pfSense"; do # "iptables" "nftables" ; do
+        model="openai"
+
+        # 4.7.1
+        echo Gerando regras
+        #python teste.py $pcap_path $firewall $model -a slowloris > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+        sed -i 's/\r$//' tmp.sh # Windows moment
+
+        # 4.7.2
+        echo "Aplicando regras"
+        if [ $firewall = "pfSense" ]; then # Caso o firewall atual seja o pfSense
+            VBoxManage controlvm $pfSense_vm poweroff
+            sleep 3
+            VBoxManage snapshot $pfSense_vm restore "Firewall State"
+            sleep 3
+            VBoxManage startvm $pfSense_vm --type headless
+            sleep 10
+            #start_attack $attack
+            #echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
+            #collect_download_times slowloris.txt
+            #stop_attack
+            ssh tcc-pfsense-vm 'sh -s' < tmp.sh
+        else
+            VBoxManage controlvm $server_vm poweroff
+            sleep 3
+            VBoxManage snapshot $server_vm restore "Default State"
+            sleep 3
+            VBoxManage startvm $server_vm --type headless
+            sleep 20
+            
+            { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
+        fi
+        sleep 10
+        #rm -f tmp.sh
+
+        # 4.7.3
+        start_attack $attack
+        echo Coletando tempos com regras aplicadas
+        collect_download_times slowloris_ai.txt
+        stop_attack
+
+    done
+    unset attack
 done
 stop_attack
 shutdown_vms
