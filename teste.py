@@ -4,7 +4,6 @@ warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
 from scapy.all import rdpcap
 import json
-import sys
 import argparse
 from argparse import Namespace
 
@@ -35,7 +34,7 @@ def openai_response(input: str) -> str:
     client = OpenAI()
 
     response = client.responses.create(
-        model="gpt-5.6-luna",
+        model="gpt-6-luna",
         input=input
     )
 
@@ -59,8 +58,6 @@ def claude_response(input: str) -> str:
 
     output = "".join(block.text for block in response.content if block.type == "text")
     return output
-
-#TODO: deepseek_response
 
 def main():
     # Parse arguments
