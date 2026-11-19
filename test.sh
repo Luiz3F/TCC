@@ -77,8 +77,8 @@ client_collect_times() {
     local N=$1
     TIMEFORMAT=%R
     for ((i = 0; i < N; i++)); do
-        time wget --timeout=120 --tries=2 -qO teste.html http://192.168.244.4:8080
-        test $? -eq 0 || exit 1
+        time wget --timeout=120 --tries=1 -qO teste.html http://192.168.244.4:8080
+        #test $? -eq 0 || exit 1
     done
 }
 
@@ -151,7 +151,6 @@ start_attack() {
 }
 
 # 1.
-
 start_vms
 
 # 2/3.
@@ -164,28 +163,29 @@ start_vms
     #attack="auxiliary/dos/http/slowloris" #tcp/synflood" #" #" #" 
     # https://github.com/rapid7/metasploit-framework/blob/master/modules/auxiliary/dos/http/apache_range_dos.rb
     #pcap_path="./slowloris.pcap"
-for i in "synflood" "slowloris"; do
+for i in "slowloris"; do #"synflood"
+    #break
     declare -n attack=$i
+    pcap_path="${attack["name"]}.pcap"
     # 4.1/2
     echo Começando ataque
-    start_attack ${attack["path"]}
+    #start_attack ${attack["path"]}
 
     # 4.3/4
     echo Coletando tempos com ${attack["name"]}
-    collect_download_times ${attack["name"]}.txt
-    stop_attack
-
+    #collect_download_times ${attack["name"]}.txt
+    #stop_attack
 
     # 4.5/6
     echo Colectando .pcap do ataque
-    ssh tcc-pfsense-vm "nohup timeout 35 tcpdump -ni em2 -w /tmp/${attack["name"]}.pcap host $server_ip > /tmp/${attack["name"]}.log 2>&1 &"
+    ssh tcc-pfsense-vm "nohup timeout 15 tcpdump -ni em2 -w /tmp/$pcap_path host $server_ip > /tmp/${attack["name"]}.log 2>&1 &"
     error "Falha ao coletar .pcap do ataque"
     sleep 2
-    start_attack $attack
+    start_attack ${attack["path"]}
     sleep 10
     stop_attack
     sleep 5
-    scp tcc-pfsense-vm:/tmp/${attack["name"]}.pcap .
+    #scp tcc-pfsense-vm:/tmp/$pcap_path .
     error "Falha ao coletar .pcap do ataque"
     [ -s $pcap_path ] # Check if empty file
     error "Falha ao coletar .pcap do ataque"
@@ -198,16 +198,14 @@ for i in "synflood" "slowloris"; do
     #error "Falha ao coletar .pcap do ataque 2"
     #stop_attack
     #exit 0
-
-done
-exit 0
     # 4.7
     for firewall in "pfSense"; do # "iptables" "nftables" ; do
         model="openai"
 
         # 4.7.1
         echo Gerando regras
-        #python teste.py $pcap_path $firewall $model -a slowloris > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+        #python teste.py $pcap_path $firewall $model -a $attack["name"] > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+        error "Falha na geração de regras"
         sed -i 's/\r$//' tmp.sh # Windows moment
 
         # 4.7.2
@@ -219,10 +217,10 @@ exit 0
             sleep 3
             VBoxManage startvm $pfSense_vm --type headless
             sleep 10
-            #start_attack $attack
-            #echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
-            #collect_download_times slowloris.txt
-            #stop_attack
+            start_attack ${attack["path"]}
+            echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
+            collect_download_times ${attack["name"]}.txt
+            stop_attack
             ssh tcc-pfsense-vm 'sh -s' < tmp.sh
         else
             VBoxManage controlvm $server_vm poweroff
@@ -238,9 +236,9 @@ exit 0
         #rm -f tmp.sh
 
         # 4.7.3
-        start_attack $attack
+        start_attack ${attack["path"]}
         echo Coletando tempos com regras aplicadas
-        collect_download_times slowloris_ai.txt
+        collect_download_times "${attack["name"]}_$model.txt"
         stop_attack
 
     done
