@@ -75,7 +75,7 @@ def main():
 
     input = f"""Use plaintext syntax. \
 Make a sh script that generates and applies {firewall} firewall rules to stop the {attack_text}DoS attack detected in the following packet capture. \
-Make the script and nothing else. {ip_agnostic_text}. \
+Make the script and nothing else. Make the script so that it does not take any command line inputs. {ip_agnostic_text}. \
 {packets_string}"""
 
     response = ""
