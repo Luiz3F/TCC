@@ -45,7 +45,7 @@ def claude_response(input: str) -> str:
 
     response = client.messages.create(
         max_tokens=10240,
-        model="claude-sonnet-5.5",
+        model="claude-sonnet-5-5",
         messages=[
             {
                 "content": input,
