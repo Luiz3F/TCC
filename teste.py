@@ -12,7 +12,7 @@ def parse_arguments() -> Namespace:
     
     parser.add_argument("pcap_file", type=str, help="Path to the .pcap file that will be analysed")
     parser.add_argument("firewall", type=str, help="Firewall for which the rules will be generated")
-    parser.add_argument("model", type=str, choices=["openai", "claude", "deepseek"], help="Model that will generate the script")
+    parser.add_argument("model", type=str, choices=["openai", "claude"], help="Model that will generate the script")
     parser.add_argument("-i", "--ip-agnostic", action="store_true", help="Script will create rules that are agnostic to attacker ip (in case of ip spoofing or something like that)")
     parser.add_argument("-a", "--attack", type=str, help="Type of DoS attack detected", default=None)
 
@@ -45,7 +45,7 @@ def claude_response(input: str) -> str:
 
     response = client.messages.create(
         max_tokens=10240,
-        model="claude-sonnet-5-5",
+        model="claude-haiku-5-5",
         messages=[
             {
                 "content": input,
@@ -84,9 +84,6 @@ Make the script and nothing else. Make the script so that it does not take any c
             response = openai_response(input)
         case "claude":
             response = claude_response(input)
-        case "deepseek":
-            # TODO
-            response = "Not implemented"
         case _:
             response = "Should not be reached!!!"
             
