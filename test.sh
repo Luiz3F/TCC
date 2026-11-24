@@ -1,27 +1,5 @@
 #!/bin/bash
 
-# 0. Definir constantes (N, firewall)
-# 1. Resetar VMs a um estado antes da modificação do firewall
-# 2. SSH na VM cliente legítima e coletar tempo controle sem ataque N vezes
-# 3. Desconectar do cliente legítimo
-# 4. Para cada tipo de ataque:
-# 4.1. SSH na VM atacante e iniciar ataque do tipo attack
-# 4.2. Desconectar do atacante
-# 4.3. SSH na VM cliente legítima e coletar tempo controle com ataque N vezes
-# 4.4. Desconectar do cliente legítimo
-# 4.5. SSH no gateway para coletar pcap
-# 4.6. Desconectar do gateway
-# 4.7. Para cada modelo de LLM:
-# 4.7.1. Rodar o script em python usando o pcap, tipo de ataque, firewall e modelo de LLM como parâmetros
-# 4.7.2. Aplicar a regra gerada
-# 4.7.3. SSH na VM cliente legítima e coletar tempo com ataque e com regras N vezes
-# 4.7.4. Desconectar do cliente legítimo
-# 4.7.5. Resetar VMs a um estado antes da modificação do firewall
-# 5. Voltar ao passo 1 mudando o firewall
-
-#python ./teste.py
-
-# 0.
 readonly NUM_ITER=10
 client_ip="192.168.165.5"
 server_ip="192.168.244.4"
@@ -30,7 +8,6 @@ client_vm="iptables"
 server_vm="nftables"
 pfSense_vm="pfSense"
 attacker_vm="kali-linux-2025.4-virtualbox-amd64"
-# tcc-client-vm, tcc-server-vm, tcc-attacker-vm, tcc-pfsense-vm
 
 declare -A slowloris=(["name"]="slowloris" ["path"]="auxiliary/dos/http/slowloris")
 declare -A synflood=(["name"]="synflood" ["path"]="auxiliary/dos/tcp/synflood")
@@ -73,17 +50,19 @@ start_vms() {
     sleep 15
 }
 
+# Will be run in client vm
 client_collect_times() {
     local N=$1
     TIMEFORMAT=%R
     for ((i = 0; i < N; i++)); do
         time wget --timeout=120 --tries=1 -qO teste.html http://192.168.244.4:8080
-        #test $? -eq 0 || exit 1
     done
 }
 
 collect_download_times() {
     local filename=$1
+
+    # Run client_collect_times inside client vm
     ssh tcc-client-vm "$(declare -f client_collect_times); client_collect_times $NUM_ITER" > $filename 2>&1
     [ -s $filename ]
     error "Falha na coleta de tempos"
@@ -100,6 +79,7 @@ collect_download_times() {
     echo $dev >> $filename
 }
 
+# Will be run inside attacker vm
 attacker_stop_attack() {
     local script_path="/tmp/start_exploit.rc"
     local pid_path="/tmp/exploit.pid"
@@ -115,10 +95,12 @@ attacker_stop_attack() {
 }
 
 stop_attack() {
-    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_stop_attack); attacker_stop_attack'"
+    echo "Parando ataques que estejam acontecendo"
+    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_stop_attack); attacker_stop_attack' 2>/dev/null"
     error "Falha na conexão com vm atacante" 
 }
 
+# Will be run inside attacker vm
 attacker_start_attack() {
     local attack=$1
     local server_ip=$2
@@ -143,85 +125,67 @@ start_attack() {
     stop_attack
 
     local attack=$1
-    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip'"
+    echo "Começando ataque $attack"
+    { printf "kali\n"; } | ssh tcc-attacker-vm "sudo -S bash -c '$(declare -f attacker_start_attack); attacker_start_attack $attack $server_ip' 2>/dev/null"
     error "Falha na conexão com vm atacante"
 
     # It may take some seconds for the attack to affect the server
     sleep 25
 }
 
-# 1.
 start_vms
 
-# 2/3.
-#echo Coletando tempos controle
-#collect_download_times controle.txt
+echo Coletando tempos controle
+collect_download_times controle.txt
 
-# 4.
+for i in "slowloris" "synflood"; do
 
-    # TODO
-    #attack="auxiliary/dos/http/slowloris" #tcp/synflood" #" #" #" 
-    # https://github.com/rapid7/metasploit-framework/blob/master/modules/auxiliary/dos/http/apache_range_dos.rb
-    #pcap_path="./slowloris.pcap"
-for i in "slowloris"; do #"synflood"
-    #break
     declare -n attack=$i
     pcap_path="${attack["name"]}.pcap"
-    # 4.1/2
-    echo Começando ataque
-    #start_attack ${attack["path"]}
 
-    # 4.3/4
     echo Coletando tempos com ${attack["name"]}
-    #collect_download_times ${attack["name"]}.txt
-    #stop_attack
+    start_attack ${attack["path"]}
+    collect_download_times ${attack["name"]}.txt
+    stop_attack
 
-    # 4.5/6
     echo Colectando .pcap do ataque
-    ssh tcc-pfsense-vm "nohup timeout 15 tcpdump -ni em2 -w /tmp/$pcap_path host $server_ip > /tmp/${attack["name"]}.log 2>&1 &"
+    ssh tcc-pfsense-vm "nohup timeout 15 tcpdump -ni em2 -w /tmp/$pcap_path host $server_ip > /tmp/${attack["name"]}.log 2>&1 &" # .pcap is stored inside pfSense vm
     error "Falha ao coletar .pcap do ataque"
+    
+    # Sleeps are for giving time to the vms to do what they got to do before continuing
     sleep 2
     start_attack ${attack["path"]}
     sleep 10
     stop_attack
     sleep 5
-    #scp tcc-pfsense-vm:/tmp/$pcap_path .
+    scp tcc-pfsense-vm:/tmp/$pcap_path .    # Gets .pcap from pfSense vm
     error "Falha ao coletar .pcap do ataque"
-    [ -s $pcap_path ] # Check if empty file
+    [ -s $pcap_path ]                       # Check if empty file
     error "Falha ao coletar .pcap do ataque"
-    #stop_attack
-    #exit 0
-    #sleep 100
-    #timeout --preserve-status 10 ssh tcc-pfsense-vm "tcpdump -ni em2 -w -" > $pcap_path
-    #test $? -eq 255 || error "Falha ao coletar .pcap do ataque 1"
-    #[ -s $pcap_path ]
-    #error "Falha ao coletar .pcap do ataque 2"
-    #stop_attack
-    #exit 0
-    # 4.7
-    for firewall in "pfSense"; do # "iptables" "nftables" ; do
+
+    for firewall in "iptables" "nftables" "pfSense"; do 
         model="openai"
+        script_path="./${model}/${attack["name"]}_${firewall}_rules_${model}.sh"
 
-        # 4.7.1
-        echo Gerando regras
-        #python teste.py $pcap_path $firewall $model -a $attack["name"] > tmp.sh # TODO: FAZER SER UM ARQUIVO TMP REAL! (mktemp)
+        echo "Gerando regras para ${firewall}/${attack["name"]}"
+        touch $script_path
+        python rules_gen.py $pcap_path $firewall $model -a $attack["name"] > $script_path
         error "Falha na geração de regras"
-        sed -i 's/\r$//' tmp.sh # Windows moment
+        sed -i 's/\r$//' $script_path # Windows moment
 
-        # 4.7.2
-        echo "Aplicando regras"
-        if [ $firewall = "pfSense" ]; then # Caso o firewall atual seja o pfSense
+        
+        echo "Reiniciando e restaurando VM"
+        
+        # If firewall is pfSense, firewall mode has to be enabled
+        if [ $firewall = "pfSense" ]; then 
             VBoxManage controlvm $pfSense_vm poweroff
             sleep 3
             VBoxManage snapshot $pfSense_vm restore "Firewall State"
             sleep 3
             VBoxManage startvm $pfSense_vm --type headless
             sleep 10
-            start_attack ${attack["path"]}
-            echo Coletando tempos antes da aplicação das regras pra ter certeza que essa joça funcioa
-            collect_download_times ${attack["name"]}.txt
-            stop_attack
-            ssh tcc-pfsense-vm 'sh -s' < tmp.sh
+            echo "Aplicando regras para ${firewall}/${attack["name"]}"
+            ssh tcc-pfsense-vm 'sh -s' < $script_path
         else
             VBoxManage controlvm $server_vm poweroff
             sleep 3
@@ -229,16 +193,14 @@ for i in "slowloris"; do #"synflood"
             sleep 3
             VBoxManage startvm $server_vm --type headless
             sleep 20
-            
-            { printf "senha\n"; cat tmp.sh; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
+            echo "Aplicando regras para ${firewall}/${attack["name"]}"
+            { printf "senha\n"; cat $script_path; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
         fi
         sleep 10
-        #rm -f tmp.sh
 
-        # 4.7.3
         start_attack ${attack["path"]}
-        echo Coletando tempos com regras aplicadas
-        collect_download_times "${attack["name"]}_$model.txt"
+        echo "Coletando tempos com regras aplicadas em ${firewall}/${attack["name"]}"
+        collect_download_times "./${model}/${attack["name"]}_${firewall}_${model}.txt"
         stop_attack
 
     done
