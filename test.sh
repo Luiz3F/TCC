@@ -164,45 +164,45 @@ for i in "slowloris" "synflood"; do
     error "Falha ao coletar .pcap do ataque"
 
     for firewall in "iptables" "nftables" "pfSense"; do 
-        model="openai"
-        script_path="./${model}/${attack["name"]}_${firewall}_rules_${model}.sh"
+        for model in "openai" "claude"; do 
+            script_path="./${model}/${attack["name"]}_${firewall}_rules_${model}.sh"
 
-        echo "Gerando regras para ${firewall}/${attack["name"]}"
-        touch $script_path
-        python rules_gen.py $pcap_path $firewall $model -a $attack["name"] > $script_path
-        error "Falha na geração de regras"
-        sed -i 's/\r$//' $script_path # Windows moment
+            echo "Gerando regras para ${firewall}/${attack["name"]}"
+            touch $script_path
+            python rules_gen.py $pcap_path $firewall $model -a $attack["name"] > $script_path
+            error "Falha na geração de regras"
+            sed -i 's/\r$//' $script_path # Windows moment
 
-        
-        echo "Reiniciando e restaurando VM"
-        
-        # If firewall is pfSense, firewall mode has to be enabled
-        if [ $firewall = "pfSense" ]; then 
-            VBoxManage controlvm $pfSense_vm poweroff
-            sleep 3
-            VBoxManage snapshot $pfSense_vm restore "Firewall State"
-            sleep 3
-            VBoxManage startvm $pfSense_vm --type headless
+            
+            echo "Reiniciando e restaurando VM"
+            
+            # If firewall is pfSense, firewall mode has to be enabled
+            if [ $firewall = "pfSense" ]; then 
+                VBoxManage controlvm $pfSense_vm poweroff
+                sleep 3
+                VBoxManage snapshot $pfSense_vm restore "Firewall State"
+                sleep 3
+                VBoxManage startvm $pfSense_vm --type headless
+                sleep 10
+                echo "Aplicando regras para ${firewall}/${attack["name"]}"
+                ssh tcc-pfsense-vm 'sh -s' < $script_path
+            else
+                VBoxManage controlvm $server_vm poweroff
+                sleep 3
+                VBoxManage snapshot $server_vm restore "Default State"
+                sleep 3
+                VBoxManage startvm $server_vm --type headless
+                sleep 20
+                echo "Aplicando regras para ${firewall}/${attack["name"]}"
+                { printf "senha\n"; cat $script_path; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
+            fi
             sleep 10
-            echo "Aplicando regras para ${firewall}/${attack["name"]}"
-            ssh tcc-pfsense-vm 'sh -s' < $script_path
-        else
-            VBoxManage controlvm $server_vm poweroff
-            sleep 3
-            VBoxManage snapshot $server_vm restore "Default State"
-            sleep 3
-            VBoxManage startvm $server_vm --type headless
-            sleep 20
-            echo "Aplicando regras para ${firewall}/${attack["name"]}"
-            { printf "senha\n"; cat $script_path; } | ssh tcc-server-vm -T "sudo -S sh -s 2>/dev/null"
-        fi
-        sleep 10
 
-        start_attack ${attack["path"]}
-        echo "Coletando tempos com regras aplicadas em ${firewall}/${attack["name"]}"
-        collect_download_times "./${model}/${attack["name"]}_${firewall}_${model}.txt"
-        stop_attack
-
+            start_attack ${attack["path"]}
+            echo "Coletando tempos com regras aplicadas em ${firewall}/${attack["name"]}"
+            collect_download_times "./${model}/${attack["name"]}_${firewall}_${model}.txt"
+            stop_attack
+        done
     done
     unset attack
 done
